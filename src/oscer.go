@@ -1,15 +1,15 @@
 // oscer.go by aike
-// licenced under MIT License. 
+// licenced under MIT License.
 
 package main
 
 import (
 	"fmt"
 	"os"
-	"./osc"
+	"oscer/src/osc"
 )
 
-var version string = "1.2"
+var version = "1.2"
 
 func main() {
 	if osc.IsServer(os.Args) {
@@ -30,12 +30,12 @@ func main() {
 func checkError(err error) {
 	if err != nil {
 		if err.Error() == "args error" {
-			fmt.Fprintf(os.Stderr, "oscer ver %s\n", version)
-			fmt.Fprintf(os.Stderr, "usage: oscer host port /osc/address [args ...]\n")
-			fmt.Fprintf(os.Stderr, "       oscer receive port\n")
+			_, _ = fmt.Fprintf(os.Stderr, "oscer ver %s\n", version)
+			_, _ = fmt.Fprintf(os.Stderr, "usage: oscer host port /osc/address [args ...]\n")
+			_, _ = fmt.Fprintf(os.Stderr, "       oscer receive port\n")
 			os.Exit(1)
 		} else {
-			fmt.Fprintf(os.Stderr, "%s\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "%s\n", err)
 			os.Exit(2)
 		}
 	}

@@ -1,43 +1,45 @@
 // osc.go by aike
-// licenced under MIT License. 
+// licenced under MIT License.
 
 package osc
 
 import (
+	"bytes"
+	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"regexp"
 	"strconv"
-	"bytes"
-	"encoding/binary"
-	"errors"
 )
 
 var serverIP string
 var serverPort string
 var senddata []byte
 var oscarg []byte
-var initdata bool = false
+var initdata = false
 
 func Send() {
 	if !initdata {
 		return
 	}
 
-	udpAddr, err := net.ResolveUDPAddr("udp", serverIP + ":" + serverPort)
+	udpAddr, err := net.ResolveUDPAddr("udp", serverIP+":"+serverPort)
 	checkError(err)
 
 	conn, err := net.DialUDP("udp", nil, udpAddr)
 	checkError(err)
-	defer conn.Close()
+	defer func(conn *net.UDPConn) {
+		_ = conn.Close()
+	}(conn)
 
-	conn.Write(senddata)
+	_, _ = conn.Write(senddata)
 }
 
 func checkError(err error) {
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fatal: error: %s", err.Error())
+		_, _ = fmt.Fprintf(os.Stderr, "fatal: error: %s", err.Error())
 		os.Exit(1)
 	}
 }
@@ -63,10 +65,10 @@ func CheckArg(arr []string) error {
 
 	port, err := strconv.Atoi(arr[2])
 	if err != nil {
-		return errors.New("port number error")		
+		return errors.New("port number error")
 	}
 	if port < 0 || port > 65535 {
-		return errors.New("port number error")		
+		return errors.New("port number error")
 	}
 	serverPort = arr[2]
 
@@ -80,21 +82,21 @@ func CheckArg(arr []string) error {
 	for i := 4; i < len(arr); i++ {
 		if match(`^[+-]?[0-9]+$`, arr[i]) {
 			// Int32
-			num_i64, err := strconv.ParseInt(arr[i], 10, 32)
-			num_i32 := int32(num_i64)
+			numI64, err := strconv.ParseInt(arr[i], 10, 32)
+			numI32 := int32(numI64)
 			if err != nil {
 				return errors.New("osc args error")
 			}
-			pushDataI32(num_i32)
+			pushDataI32(numI32)
 
 		} else if match(`^[+-]?[0-9.]+$`, arr[i]) {
 			// Float32
-			num_f64, err := strconv.ParseFloat(arr[i], 32)
-			num_f32 := float32(num_f64)
+			numF64, err := strconv.ParseFloat(arr[i], 32)
+			numF32 := float32(numF64)
 			if err != nil {
 				return errors.New("osc args error")
 			}
-			pushDataF32(num_f32)
+			pushDataF32(numF32)
 
 		} else {
 			// String
@@ -111,7 +113,6 @@ func CheckArg(arr []string) error {
 	return nil
 }
 
-
 func IsServer(arr []string) bool {
 	if len(arr) != 3 {
 		return false
@@ -124,39 +125,38 @@ func IsServer(arr []string) bool {
 func CreateServer(portstr string) error {
 	port, err := strconv.Atoi(portstr)
 	if err != nil {
-		return errors.New("port number error")		
+		return errors.New("port number error")
 	}
 	if port < 0 || port > 65535 {
-		return errors.New("port number error")		
+		return errors.New("port number error")
 	}
 
-    addr, err := net.ResolveUDPAddr("udp", ":" + portstr)
+	addr, err := net.ResolveUDPAddr("udp", ":"+portstr)
 	if err != nil {
-		return errors.New("server resolve error")		
+		return errors.New("server resolve error")
 	}
 
-    conn, err := net.ListenUDP("udp", addr)
+	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
-		return errors.New("server listen error")		
+		return errors.New("server listen error")
 	}
 
-    defer conn.Close()
-    buf := make([]byte, 4096)
-    for {
-        len, _, err := conn.ReadFromUDP(buf)
+	defer func(conn *net.UDPConn) {
+		_ = conn.Close()
+	}(conn)
+	buf := make([]byte, 4096)
+	for {
+		_len, _, err := conn.ReadFromUDP(buf)
 		if err != nil {
-			return errors.New("server data read error")		
+			return errors.New("server data read error")
 		}
 
-        parse(buf, len)
-    }
-
-    return nil;
+		parse(buf, _len)
+	}
 }
 
-
 func match(reg, str string) bool {
-    return regexp.MustCompile(reg).Match([]byte(str))
+	return regexp.MustCompile(reg).Match([]byte(str))
 }
 
 func pushAdrsString(str string) {
@@ -167,7 +167,7 @@ func pushAdrsString(str string) {
 }
 
 func fill4byte() {
-	for datalen := len(senddata); datalen % 4 != 0; datalen++ {
+	for datalen := len(senddata); datalen%4 != 0; datalen++ {
 		senddata = append(senddata, 0)
 	}
 }
@@ -175,14 +175,14 @@ func fill4byte() {
 func pushDataI32(num int32) {
 	senddata = append(senddata, 'i')
 	buf := bytes.NewBuffer([]byte{})
-	binary.Write(buf, binary.BigEndian, num)
+	_ = binary.Write(buf, binary.BigEndian, num)
 	oscarg = append(oscarg, buf.Bytes()...)
 }
 
 func pushDataF32(num float32) {
 	senddata = append(senddata, 'f')
 	buf := bytes.NewBuffer([]byte{})
-	binary.Write(buf, binary.BigEndian, num)
+	_ = binary.Write(buf, binary.BigEndian, num)
 	oscarg = append(oscarg, buf.Bytes()...)
 }
 
@@ -192,23 +192,12 @@ func pushDataString(str string) {
 	oscarg = append(oscarg, buf.Bytes()...)
 
 	oscarg = append(oscarg, 0)
-	for datalen := len(oscarg); datalen % 4 != 0; datalen++ {
+	for datalen := len(oscarg); datalen%4 != 0; datalen++ {
 		oscarg = append(oscarg, 0)
 	}
 }
 
-func GetData() []byte {
-	return senddata
-}
-
 func parse(arr []byte, datalen int) {
-	//	for i := 0; i < datalen; i++ {
-	//		fmt.Printf("%02x ", arr[i])
-	//		if i % 16 == 15 {
-	//			fmt.Printf("\n")
-	//		}
-	//	}
-	//	fmt.Printf("\n==================\n")
 
 	var pos int
 	var i32 int32
@@ -223,15 +212,15 @@ func parse(arr []byte, datalen int) {
 
 	for i := 0; i < len(flags); i++ {
 		switch flags[i] {
-			case 'i':
-				i32, pos = getInt32(arr, pos)
-				fmt.Printf(" %v", i32)
-			case 'f':
-				f32, pos = getFloat32(arr, pos)
-				fmt.Printf(" %v", f32)
-			case 's':
-				str, pos = getString(arr, pos)
-				fmt.Printf(` "%s"`, str)
+		case 'i':
+			i32, pos = getInt32(arr, pos)
+			fmt.Printf(" %v", i32)
+		case 'f':
+			f32, pos = getFloat32(arr, pos)
+			fmt.Printf(" %v", f32)
+		case 's':
+			str, pos = getString(arr, pos)
+			fmt.Printf(` "%s"`, str)
 		}
 	}
 	fmt.Printf("\n")
@@ -239,7 +228,8 @@ func parse(arr []byte, datalen int) {
 
 func getString(arr []byte, start int) (string, int) {
 	pos := start
-	for ; arr[pos] != 0 && pos < len(arr); pos++ {}
+	for ; arr[pos] != 0 && pos < len(arr); pos++ {
+	}
 
 	rest := 4 - (pos % 4)
 	pos += rest
@@ -249,15 +239,14 @@ func getString(arr []byte, start int) (string, int) {
 
 func getInt32(arr []byte, start int) (int32, int) {
 	var n int32
-	buf := bytes.NewBuffer(arr[start:start + 4])
-	binary.Read(buf, binary.BigEndian, &n)
+	buf := bytes.NewBuffer(arr[start : start+4])
+	_ = binary.Read(buf, binary.BigEndian, &n)
 	return n, start + 4
 }
 
 func getFloat32(arr []byte, start int) (float32, int) {
 	var f float32
-	buf := bytes.NewBuffer(arr[start:start + 4])
-	binary.Read(buf, binary.BigEndian, &f)
-	return f, start + 4	
+	buf := bytes.NewBuffer(arr[start : start+4])
+	_ = binary.Read(buf, binary.BigEndian, &f)
+	return f, start + 4
 }
-
